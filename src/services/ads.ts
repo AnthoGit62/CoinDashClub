@@ -4,6 +4,7 @@ import type { EntitlementState } from "../types";
 export type AdResult = {
   shown: boolean;
   rewardCoins: number;
+  rewardSpins: number;
   reason?: "ad_free" | "loaded" | "mock";
 };
 
@@ -16,6 +17,7 @@ export async function showInterstitialAd(entitlements: EntitlementState): Promis
     return {
       shown: false,
       rewardCoins: 0,
+      rewardSpins: 0,
       reason: "ad_free"
     };
   }
@@ -25,6 +27,7 @@ export async function showInterstitialAd(entitlements: EntitlementState): Promis
   return {
     shown: true,
     rewardCoins: 0,
+    rewardSpins: 0,
     reason: "mock"
   };
 }
@@ -34,6 +37,7 @@ export async function showRewardedAd(entitlements: EntitlementState): Promise<Ad
     return {
       shown: false,
       rewardCoins: MONETIZATION.rewardedAdCoins,
+      rewardSpins: MONETIZATION.rewardedAdSpins,
       reason: "ad_free"
     };
   }
@@ -43,6 +47,7 @@ export async function showRewardedAd(entitlements: EntitlementState): Promise<Ad
   return {
     shown: true,
     rewardCoins: MONETIZATION.rewardedAdCoins,
+    rewardSpins: MONETIZATION.rewardedAdSpins,
     reason: "mock"
   };
 }
