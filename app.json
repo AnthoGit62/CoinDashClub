@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Coin Dash Club",
+    "slug": "coin-dash-club",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tonstudio.coindashclub"
+    },
+    "android": {
+      "package": "com.tonstudio.coindashclub",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "TODO_CREATE_WITH_EAS"
+      }
+    }
+  }
+}
