@@ -11,7 +11,9 @@ type Props = {
 export function StatPill({ label, value, tone = "plain" }: Props) {
   return (
     <View style={[styles.root, styles[tone]]}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label} numberOfLines={1}>
+        {label}
+      </Text>
       <Text style={styles.value} numberOfLines={1}>
         {value}
       </Text>
@@ -21,7 +23,7 @@ export function StatPill({ label, value, tone = "plain" }: Props) {
 
 const styles = StyleSheet.create({
   root: {
-    minWidth: 92,
+    minWidth: 78,
     minHeight: 52,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.spacing.md,
