@@ -1,276 +1,354 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ActionButton } from "../components/ActionButton";
-import { Sprite, type SpriteKind } from "../components/Sprite";
 import { StatPill } from "../components/StatPill";
+import {
+  BOARD_TILES,
+  getDistrictCompletion,
+  getDistrictName,
+  getLandmarkCost,
+  LANDMARK_MAX_LEVEL,
+  LANDMARKS
+} from "../config/game";
 import { theme } from "../constants/theme";
-import { getEntitlements } from "../services/entitlements";
-import type { GameResult, PlayerProgress } from "../types";
-
-const ROUND_SECONDS = 30;
-
-type ArenaSize = {
-  width: number;
-  height: number;
-};
-
-type Target = {
-  kind: Extract<SpriteKind, "coin" | "gem" | "bomb">;
-  x: number;
-  y: number;
-  size: number;
-};
+import type { BoardTileType, GameResult, LandmarkId, PlayerProgress, UpgradeResult } from "../types";
 
 type Props = {
   progress: PlayerProgress;
-  onRoundFinished: (result: GameResult) => Promise<void>;
+  busy: boolean;
+  onRoll: () => Promise<GameResult | null>;
+  onUpgradeLandmark: (landmarkId: LandmarkId) => Promise<UpgradeResult>;
   onRewardAd: () => Promise<void>;
 };
 
-export function GameScreen({ progress, onRoundFinished, onRewardAd }: Props) {
-  const entitlements = getEntitlements(progress);
-  const [arena, setArena] = useState<ArenaSize>({ width: 0, height: 0 });
-  const [target, setTarget] = useState<Target>(() => createTarget({ width: 320, height: 360 }));
-  const [status, setStatus] = useState<"idle" | "running" | "ended">("idle");
-  const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
-  const [score, setScore] = useState(0);
-  const [combo, setCombo] = useState(0);
-  const [roundCoins, setRoundCoins] = useState(0);
-  const [bombsHit, setBombsHit] = useState(0);
-  const [message, setMessage] = useState("Pret a jouer");
-  const finishingRef = useRef(false);
+export function GameScreen({ progress, busy, onRoll, onUpgradeLandmark, onRewardAd }: Props) {
+  const [lastResult, setLastResult] = useState<GameResult | null>(null);
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const completion = getDistrictCompletion(progress.landmarks);
 
-  const spawnTarget = useCallback(() => {
-    setTarget(createTarget(arena));
-  }, [arena]);
+  async function roll() {
+    setUpgradeMessage(null);
+    const result = await onRoll();
 
-  const finishRound = useCallback(async () => {
-    if (finishingRef.current) {
-      return;
+    if (result) {
+      setLastResult(result);
     }
-
-    finishingRef.current = true;
-    setStatus("ended");
-    setMessage("Partie terminee");
-    await onRoundFinished({
-      score,
-      coinsEarned: roundCoins,
-      bombsHit
-    });
-  }, [bombsHit, onRoundFinished, roundCoins, score]);
-
-  useEffect(() => {
-    if (arena.width > 0 && arena.height > 0) {
-      spawnTarget();
-    }
-  }, [arena.height, arena.width, spawnTarget]);
-
-  useEffect(() => {
-    if (status !== "running") {
-      return undefined;
-    }
-
-    const timer = setInterval(() => {
-      setTimeLeft((current) => Math.max(0, current - 1));
-    }, 1000);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [status]);
-
-  useEffect(() => {
-    if (status === "running" && timeLeft === 0) {
-      void finishRound();
-    }
-  }, [finishRound, status, timeLeft]);
-
-  function handleArenaLayout(event: LayoutChangeEvent) {
-    const { width, height } = event.nativeEvent.layout;
-    setArena({ width, height });
   }
 
-  function startRound() {
-    finishingRef.current = false;
-    setStatus("running");
-    setTimeLeft(ROUND_SECONDS);
-    setScore(0);
-    setCombo(0);
-    setRoundCoins(0);
-    setBombsHit(0);
-    setMessage("Attrape les pieces");
-    setTarget(createTarget(arena));
-  }
-
-  function handleTargetPress() {
-    if (status !== "running") {
-      return;
-    }
-
-    if (target.kind === "bomb") {
-      setScore((current) => Math.max(0, current - 3));
-      setCombo(0);
-      setBombsHit((current) => current + 1);
-      setTimeLeft((current) => Math.max(0, current - 2));
-      setMessage("Bombe: -3 score, -2 sec");
-      spawnTarget();
-      return;
-    }
-
-    const nextCombo = combo + 1;
-    const baseScore = target.kind === "gem" ? 5 : 1;
-    const comboBonus = nextCombo > 0 && nextCombo % 5 === 0 ? 2 : 0;
-    const coinReward = (target.kind === "gem" ? 8 : 2) + comboBonus;
-    const finalCoins = coinReward * entitlements.coinMultiplier;
-
-    setScore((current) => current + baseScore + comboBonus);
-    setCombo(nextCombo);
-    setRoundCoins((current) => current + finalCoins);
-    setMessage(`+${finalCoins} pieces`);
-    spawnTarget();
+  async function upgrade(landmarkId: LandmarkId) {
+    const result = await onUpgradeLandmark(landmarkId);
+    setUpgradeMessage(result.message);
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView contentContainerStyle={styles.root} showsVerticalScrollIndicator={false}>
       <View style={styles.statsRow}>
-        <StatPill label="Score" value={score} tone="teal" />
-        <StatPill label="Temps" value={`${timeLeft}s`} tone={timeLeft < 8 ? "coral" : "plain"} />
-        <StatPill label="Pieces" value={roundCoins} tone="gold" />
+        <StatPill label="Quartier" value={progress.districtIndex + 1} tone="teal" />
+        <StatPill label="Progression" value={`${completion}%`} tone="gold" />
+        <StatPill label="Fortune max" value={progress.highScore} />
       </View>
 
-      <View style={styles.arena} onLayout={handleArenaLayout}>
-        <View style={styles.arenaGrid} />
-        <View style={styles.playerBadge}>
-          <Sprite kind="player" size={42} />
+      <View style={styles.boardPanel}>
+        <View style={styles.boardHeader}>
+          <View>
+            <Text style={styles.panelKicker}>Plateau</Text>
+            <Text style={styles.panelTitle}>{getDistrictName(progress.districtIndex)}</Text>
+          </View>
+          <View style={styles.diceBadge}>
+            <Text style={styles.diceLabel}>Dernier</Text>
+            <Text style={styles.diceValue}>{lastResult ? lastResult.steps : "-"}</Text>
+          </View>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Cible ${target.kind}`}
-          onPress={handleTargetPress}
-          style={[
-            styles.target,
-            {
-              left: target.x,
-              top: target.y,
-              width: target.size,
-              height: target.size
-            }
-          ]}
-        >
-          <Sprite kind={target.kind} size={target.size} />
-        </Pressable>
+        <View style={styles.boardGrid}>
+          {BOARD_TILES.map((tile, index) => {
+            const active = progress.boardPosition === index;
+
+            return (
+              <View key={`${tile.type}-${index}`} style={[styles.tile, tileTone(tile.type), active && styles.activeTile]}>
+                <Text style={[styles.tileShort, active && styles.activeTileShort]}>{tile.shortLabel}</Text>
+                <Text style={[styles.tileLabel, active && styles.activeTileLabel]} numberOfLines={1}>
+                  {tile.label}
+                </Text>
+                {active ? (
+                  <View style={styles.pawn}>
+                    <Text style={styles.pawnText}>CD</Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.eventPanel}>
+          <Text style={styles.eventTitle}>
+            {lastResult ? `${lastResult.tileLabel} - ${lastResult.steps} pas` : "Pret a lancer"}
+          </Text>
+          <Text style={styles.eventCopy}>
+            {lastResult
+              ? lastResult.message
+              : "Lance le de, avance sur le plateau, puis reinvestis tes gains dans le quartier."}
+          </Text>
+        </View>
+
+        <View style={styles.controls}>
+          <ActionButton
+            label={progress.spins > 0 ? "Lancer" : "Plus de lancers"}
+            disabled={busy || progress.spins <= 0}
+            onPress={roll}
+            style={styles.controlButton}
+          />
+          <ActionButton
+            label="Bonus pub"
+            tone="secondary"
+            disabled={busy}
+            onPress={onRewardAd}
+            style={styles.controlButton}
+          />
+        </View>
       </View>
 
-      <View style={styles.statusRow}>
-        <Text style={styles.statusText}>{message}</Text>
-        <Text style={styles.comboText}>Combo {combo}</Text>
-      </View>
+      <View style={styles.cityPanel}>
+        <View style={styles.cityHeader}>
+          <View>
+            <Text style={[styles.panelKicker, styles.cityKicker]}>Construction</Text>
+            <Text style={[styles.panelTitle, styles.cityTitle]}>Ton quartier</Text>
+          </View>
+          <Text style={styles.cityPercent}>{completion}%</Text>
+        </View>
 
-      <View style={styles.controls}>
-        <ActionButton
-          label={status === "running" ? "Terminer" : status === "ended" ? "Rejouer" : "Jouer"}
-          tone={status === "running" ? "danger" : "primary"}
-          onPress={status === "running" ? finishRound : startRound}
-          style={styles.controlButton}
-        />
-        <ActionButton
-          label={entitlements.isAdFree ? "Bonus premium" : "Pub bonus +60"}
-          tone="secondary"
-          onPress={onRewardAd}
-          style={styles.controlButton}
-        />
+        <View style={styles.landmarkList}>
+          {LANDMARKS.map((landmark) => {
+            const level = progress.landmarks[landmark.id];
+            const cost = getLandmarkCost(landmark.id, level, progress.districtIndex);
+            const complete = level >= LANDMARK_MAX_LEVEL;
+            const disabled = busy || complete || progress.coins < cost;
+
+            return (
+              <View key={landmark.id} style={styles.landmarkCard}>
+                <View style={styles.landmarkTop}>
+                  <View style={[styles.landmarkIcon, { backgroundColor: landmark.color }]}>
+                    <Text style={styles.landmarkIconText}>{landmark.title.slice(0, 1)}</Text>
+                  </View>
+                  <View style={styles.landmarkText}>
+                    <Text style={styles.landmarkTitle}>{landmark.title}</Text>
+                    <Text style={styles.landmarkMeta}>Niveau {level}/{LANDMARK_MAX_LEVEL}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.levelTrack}>
+                  {Array.from({ length: LANDMARK_MAX_LEVEL }).map((_, index) => (
+                    <View
+                      key={`${landmark.id}-${index}`}
+                      style={[styles.levelDot, index < level && styles.levelDotFilled]}
+                    />
+                  ))}
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={disabled}
+                  onPress={() => {
+                    void upgrade(landmark.id);
+                  }}
+                  style={({ pressed }) => [
+                    styles.upgradeButton,
+                    complete && styles.completeButton,
+                    disabled && !complete && styles.disabledUpgrade,
+                    pressed && !disabled && styles.pressed
+                  ]}
+                >
+                  <Text style={[styles.upgradeText, disabled && !complete && styles.disabledUpgradeText]}>
+                    {complete ? "Complet" : `${cost} pieces`}
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+
+        {upgradeMessage ? (
+          <View style={styles.upgradeNotice}>
+            <Text style={styles.upgradeNoticeText}>{upgradeMessage}</Text>
+          </View>
+        ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
-function createTarget(arena: ArenaSize): Target {
-  const width = Math.max(arena.width, 280);
-  const height = Math.max(arena.height, 320);
-  const size = clamp(Math.round(width * 0.16), 50, 72);
-  const padding = 12;
-  const roll = Math.random();
-  const kind: Target["kind"] = roll > 0.84 ? "bomb" : roll > 0.68 ? "gem" : "coin";
+function tileTone(type: BoardTileType) {
+  if (type === "coins") {
+    return styles.coinTile;
+  }
 
-  return {
-    kind,
-    size,
-    x: randomInt(padding, Math.max(padding, width - size - padding)),
-    y: randomInt(padding + 16, Math.max(padding + 16, height - size - padding))
-  };
-}
+  if (type === "bonus") {
+    return styles.bonusTile;
+  }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
+  if (type === "shield") {
+    return styles.shieldTile;
+  }
 
-function randomInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  if (type === "raid") {
+    return styles.raidTile;
+  }
+
+  if (type === "attack") {
+    return styles.attackTile;
+  }
+
+  return styles.jackpotTile;
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-    gap: theme.spacing.md
+    gap: theme.spacing.md,
+    paddingBottom: theme.spacing.xl
   },
   statsRow: {
     flexDirection: "row",
-    gap: theme.spacing.sm,
-    justifyContent: "space-between"
+    gap: theme.spacing.sm
   },
-  arena: {
-    flex: 1,
-    minHeight: 330,
+  boardPanel: {
     borderRadius: theme.radius.md,
-    overflow: "hidden",
-    backgroundColor: "#dff7ef",
-    borderWidth: 1,
-    borderColor: "#99f6e4"
-  },
-  arenaGrid: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#dff7ef"
-  },
-  playerBadge: {
-    position: "absolute",
-    left: 12,
-    bottom: 12,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.84)"
-  },
-  target: {
-    position: "absolute",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  statusRow: {
-    minHeight: 42,
-    borderRadius: theme.radius.sm,
+    padding: theme.spacing.md,
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.surfaceMuted,
-    paddingHorizontal: theme.spacing.md,
+    gap: theme.spacing.md
+  },
+  boardHeader: {
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing.md
   },
-  statusText: {
-    flex: 1,
-    color: theme.colors.ink,
-    fontSize: 14,
-    fontWeight: "800"
+  panelKicker: {
+    color: theme.colors.inkMuted,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase"
   },
-  comboText: {
+  panelTitle: {
+    color: theme.colors.ink,
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  diceBadge: {
+    width: 62,
+    minHeight: 54,
+    borderRadius: theme.radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.ink
+  },
+  diceLabel: {
+    color: "#cbd5e1",
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase"
+  },
+  diceValue: {
+    color: theme.colors.surface,
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  boardGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.xs
+  },
+  tile: {
+    width: "23.8%",
+    aspectRatio: 1,
+    borderRadius: theme.radius.sm,
+    padding: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)"
+  },
+  activeTile: {
+    borderWidth: 2,
+    borderColor: theme.colors.ink,
+    transform: [{ scale: 1.02 }]
+  },
+  coinTile: {
+    backgroundColor: "#fff7dc"
+  },
+  bonusTile: {
+    backgroundColor: "#d8fbf4"
+  },
+  shieldTile: {
+    backgroundColor: "#dbeafe"
+  },
+  raidTile: {
+    backgroundColor: "#ede9fe"
+  },
+  attackTile: {
+    backgroundColor: "#ffe5e1"
+  },
+  jackpotTile: {
+    backgroundColor: "#fef3c7"
+  },
+  tileShort: {
+    color: theme.colors.ink,
+    fontSize: 19,
+    fontWeight: "900"
+  },
+  activeTileShort: {
+    color: theme.colors.ink
+  },
+  tileLabel: {
+    maxWidth: "100%",
+    color: theme.colors.inkMuted,
+    fontSize: 9,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  activeTileLabel: {
+    color: theme.colors.ink
+  },
+  pawn: {
+    position: "absolute",
+    right: 4,
+    top: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.ink
+  },
+  pawnText: {
+    color: theme.colors.surface,
+    fontSize: 9,
+    fontWeight: "900"
+  },
+  eventPanel: {
+    minHeight: 70,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.md,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceMuted,
+    justifyContent: "center"
+  },
+  eventTitle: {
+    color: theme.colors.ink,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  eventCopy: {
     color: theme.colors.inkMuted,
     fontSize: 13,
-    fontWeight: "800"
+    lineHeight: 18,
+    fontWeight: "700",
+    marginTop: 4
   },
   controls: {
     flexDirection: "row",
@@ -278,5 +356,122 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     flex: 1
+  },
+  cityPanel: {
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.ink,
+    gap: theme.spacing.md
+  },
+  cityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing.md
+  },
+  cityPercent: {
+    color: theme.colors.gold,
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  cityKicker: {
+    color: "#cbd5e1"
+  },
+  cityTitle: {
+    color: theme.colors.surface
+  },
+  landmarkList: {
+    gap: theme.spacing.sm
+  },
+  landmarkCard: {
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.md,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    gap: theme.spacing.sm
+  },
+  landmarkTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm
+  },
+  landmarkIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: theme.radius.sm,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  landmarkIconText: {
+    color: theme.colors.surface,
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  landmarkText: {
+    flex: 1
+  },
+  landmarkTitle: {
+    color: theme.colors.surface,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  landmarkMeta: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2
+  },
+  levelTrack: {
+    flexDirection: "row",
+    gap: theme.spacing.xs
+  },
+  levelDot: {
+    flex: 1,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.18)"
+  },
+  levelDotFilled: {
+    backgroundColor: theme.colors.gold
+  },
+  upgradeButton: {
+    minHeight: 40,
+    borderRadius: theme.radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.gold
+  },
+  completeButton: {
+    backgroundColor: theme.colors.success
+  },
+  disabledUpgrade: {
+    backgroundColor: "rgba(255,255,255,0.18)"
+  },
+  pressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.99 }]
+  },
+  upgradeText: {
+    color: theme.colors.ink,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  disabledUpgradeText: {
+    color: "#cbd5e1"
+  },
+  upgradeNotice: {
+    minHeight: 42,
+    borderRadius: theme.radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.md,
+    backgroundColor: "rgba(255,255,255,0.1)"
+  },
+  upgradeNoticeText: {
+    color: theme.colors.surface,
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center"
   }
 });
