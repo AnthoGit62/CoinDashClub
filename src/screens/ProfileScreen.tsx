@@ -2,6 +2,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { ActionButton } from "../components/ActionButton";
 import { StatPill } from "../components/StatPill";
+import { getDistrictCompletion, getDistrictName, MAX_SHIELDS } from "../config/game";
 import { theme } from "../constants/theme";
 import { getEntitlements } from "../services/entitlements";
 import type { PlayerProgress } from "../types";
@@ -13,6 +14,7 @@ type Props = {
 
 export function ProfileScreen({ progress, onReset }: Props) {
   const entitlements = getEntitlements(progress);
+  const completion = getDistrictCompletion(progress.landmarks);
 
   function confirmReset() {
     Alert.alert("Reinitialiser", "Effacer la sauvegarde locale du prototype ?", [
@@ -39,16 +41,25 @@ export function ProfileScreen({ progress, onReset }: Props) {
         <View style={styles.profileText}>
           <Text style={styles.title}>Coin Dash Club</Text>
           <Text style={styles.subtitle}>
-            Prototype mobile gratuit avec pubs et abonnement.
+            Collectionne des lancers, construis ton quartier et monte de ville en ville.
           </Text>
         </View>
       </View>
 
       <View style={styles.statsGrid}>
         <StatPill label="Pieces" value={progress.coins} tone="gold" />
-        <StatPill label="Record" value={progress.highScore} tone="teal" />
-        <StatPill label="Parties" value={progress.roundsPlayed} />
+        <StatPill label="Lancers" value={progress.spins} tone="teal" />
+        <StatPill label="Boucliers" value={`${progress.shields}/${MAX_SHIELDS}`} />
+        <StatPill label="Tours" value={progress.roundsPlayed} tone="coral" />
+        <StatPill label="Fortune max" value={progress.highScore} tone="gold" />
         <StatPill label="Pubs" value={progress.adsWatched} tone="coral" />
+      </View>
+
+      <View style={styles.infoPanel}>
+        <Text style={styles.panelTitle}>Quartier</Text>
+        <Text style={styles.infoLine}>Ville: {getDistrictName(progress.districtIndex)}</Text>
+        <Text style={styles.infoLine}>Niveau: {progress.districtIndex + 1}</Text>
+        <Text style={styles.infoLine}>Construction: {completion}%</Text>
       </View>
 
       <View style={styles.infoPanel}>
