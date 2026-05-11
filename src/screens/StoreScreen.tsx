@@ -24,7 +24,8 @@ export function StoreScreen({ progress, busy, onSubscribe, onBuyCoins, onWatchAd
   return (
     <ScrollView contentContainerStyle={styles.root} showsVerticalScrollIndicator={false}>
       <View style={styles.balanceRow}>
-        <StatPill label="Solde" value={progress.coins} tone="gold" />
+        <StatPill label="Pieces" value={progress.coins} tone="gold" />
+        <StatPill label="Lancers" value={progress.spins} tone="teal" />
         <StatPill label="Premium" value={entitlements.isAdFree ? "Actif" : "Off"} tone="teal" />
       </View>
 
@@ -53,11 +54,11 @@ export function StoreScreen({ progress, busy, onSubscribe, onBuyCoins, onWatchAd
         <View>
           <Text style={styles.panelTitle}>Pieces bonus</Text>
           <Text style={styles.panelCopy}>
-            Recompense pub ou bonus direct si premium.
+            Recompense pub avec pieces et lancers, ou bonus direct si premium.
           </Text>
         </View>
         <ActionButton
-          label={entitlements.isAdFree ? "Bonus premium +60" : "Regarder une pub +60"}
+          label={entitlements.isAdFree ? "Bonus premium" : "Regarder une pub"}
           tone="secondary"
           disabled={busy}
           onPress={onWatchAd}
@@ -73,9 +74,11 @@ export function StoreScreen({ progress, busy, onSubscribe, onBuyCoins, onWatchAd
       <View style={styles.packList}>
         {MONETIZATION.coinPacks.map((pack) => (
           <View key={pack.id} style={styles.packCard}>
-            <View>
+            <View style={styles.packInfo}>
               <Text style={styles.packTitle}>{pack.title}</Text>
-              <Text style={styles.packCoins}>{pack.coins} pieces</Text>
+              <Text style={styles.packCoins}>
+                {pack.coins} pieces + {pack.spins} lancers
+              </Text>
             </View>
             <ActionButton
               label={pack.priceLabel}
@@ -166,6 +169,9 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontSize: 16,
     fontWeight: "900"
+  },
+  packInfo: {
+    flex: 1
   },
   packCoins: {
     color: theme.colors.inkMuted,
