@@ -18,6 +18,7 @@ export async function purchaseMonthlySubscription(progress: PlayerProgress): Pro
   return {
     ...progress,
     coins: progress.coins + MONETIZATION.monthlySubscription.monthlyCoins,
+    spins: progress.spins + MONETIZATION.monthlySubscription.monthlySpins,
     premium: {
       active: true,
       expiresAt: addDays(now, 31).toISOString(),
@@ -35,7 +36,8 @@ export async function purchaseCoinPack(progress: PlayerProgress, packId: CoinPac
 
   return {
     ...progress,
-    coins: progress.coins + pack.coins
+    coins: progress.coins + pack.coins,
+    spins: progress.spins + pack.spins
   };
 }
 
@@ -47,6 +49,7 @@ export async function claimDailyPremiumBonus(progress: PlayerProgress): Promise<
   return {
     ...progress,
     coins: progress.coins + MONETIZATION.monthlySubscription.dailyCoins,
+    spins: progress.spins + MONETIZATION.monthlySubscription.dailySpins,
     lastDailyBonusAt: new Date().toISOString()
   };
 }
